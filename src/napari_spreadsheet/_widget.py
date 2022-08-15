@@ -1,46 +1,49 @@
-"""
-This module is an example of a barebones QWidget plugin for napari
+from __future__ import annotations
 
-It implements the Widget specification.
-see: https://napari.org/stable/plugins/guides.html?#widgets
-
-Replace code below according to your needs.
-"""
 from typing import TYPE_CHECKING
 
-from magicgui import magic_factory
-from qtpy.QtWidgets import QHBoxLayout, QPushButton, QWidget
+from qtpy.QtWidgets import QVBoxLayout, QWidget
+from tabulous import TableViewerWidget as _TableViewerWidget
 
 if TYPE_CHECKING:
-    import napari
+    pass
 
 
-class ExampleQWidget(QWidget):
-    # your QWidget.__init__ can optionally request the napari viewer instance
-    # in one of two ways:
-    # 1. use a parameter called `napari_viewer`, as done here
-    # 2. use a type annotation of 'napari.viewer.Viewer' for any parameter
-    def __init__(self, napari_viewer):
+class TableViewerWidget(_TableViewerWidget):
+    """The tabulous table viewer widget for napari."""
+
+    @property
+    def console(self):
+        raise AttributeError("console is not available in this widget.")
+
+
+class MainWidget(QWidget):
+    _current_widget: TableViewerWidget | None = None
+
+    def __init__(self, napari_viewer, *, new_sheet: bool = True):
         super().__init__()
         self.viewer = napari_viewer
 
-        btn = QPushButton("Click me!")
-        btn.clicked.connect(self._on_click)
+        self._table_viewer = TableViewerWidget(show=False)
+        if new_sheet:
+            self._table_viewer.add_spreadsheet()
 
-        self.setLayout(QHBoxLayout())
-        self.layout().addWidget(btn)
+        self.setLayout(QVBoxLayout())
+        self.layout().addWidget(self._table_viewer.native)
+        self.__class__._current_widget = self._table_viewer
 
-    def _on_click(self):
-        print("napari has", len(self.viewer.layers), "layers")
+    @classmethod
+    def open_table_data(cls, path: str):
+        if cls._current_widget is None:
+            import napari
 
-
-@magic_factory
-def example_magic_widget(img_layer: "napari.layers.Image"):
-    print(f"you have selected {img_layer}")
-
-
-# Uses the `autogenerate: true` flag in the plugin manifest
-# to indicate it should be wrapped as a magicgui to autogenerate
-# a widget.
-def example_function_widget(img_layer: "napari.layers.Image"):
-    print(f"you have selected {img_layer}")
+            viewer = napari.current_viewer()
+            if viewer is None:
+                raise RuntimeError("No viewer is available.")
+            self = cls(viewer, new_sheet=False)
+            viewer.window.add_dock_widget(self, name="Spreadsheet")
+            table_viewer = self._table_viewer
+        else:
+            table_viewer = cls._current_widget
+        table_viewer.open(path, type="spreadsheet")
+        return None
