@@ -7,7 +7,15 @@
 [![codecov](https://codecov.io/gh/hanjinliu/napari-spreadsheet/branch/main/graph/badge.svg)](https://codecov.io/gh/hanjinliu/napari-spreadsheet)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-spreadsheet)](https://napari-hub.org/plugins/napari-spreadsheet)
 
-A spreadsheet widget for napari
+Let's replace Microsoft Excel or Google Spreadsheet with `napari-spreadsheet` for your daily image analysis.
+
+### Highlights
+
+- Convert layer features to a spreadsheet.
+- Update layer features from a spreadsheet.
+- Send spreadsheet data to the namespace of napari's console directly.
+
+This plugin is largely dependent on [tabulous](https://github.com/hanjinliu/tabulous).
 
 ----------------------------------
 

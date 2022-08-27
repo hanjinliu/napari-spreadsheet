@@ -1,6 +1,7 @@
 import weakref
 from typing import TYPE_CHECKING, Optional
 
+from magicgui.widgets import request_values
 from qtpy import QtWidgets as QtW
 from tabulous import TableViewerWidget as _TableViewerWidget
 
@@ -21,6 +22,14 @@ class TableViewerWidget(_TableViewerWidget):
 
 
 _void = object()
+
+_STYLE = """
+QToolButton:hover {
+    border: 2px solid lightgray;
+    border-radius: 4px;
+    padding: 2px;
+}
+"""
 
 
 class LayerSource:
@@ -66,6 +75,14 @@ class MainWidget(QtW.QWidget):
         self._init_ui()
 
         self.__class__._current_widget = self._table_viewer
+
+        # some napari specific settings...
+        self._table_viewer.toolbar.visible = True
+        qtoolbar = self._table_viewer._qwidget._toolbar
+        qtoolbar.setStyleSheet(_STYLE)
+        qtoolbar._child_widgets["Analyze"]._button_and_icon[3][0].setEnabled(
+            False
+        )
 
     @classmethod
     def open_table_data(cls, path: str):
@@ -136,6 +153,19 @@ class MainWidget(QtW.QWidget):
         self._viewer.window.add_dock_widget(table_viewer, name="Spreadsheet")
         return None
 
+    def send_table_to_namespace(self, index: int, identifier: str = _void):
+        if identifier is _void:
+            options = {
+                "identifier": {"widget_type": "LineEdit", "value": "df"}
+            }
+            if out := request_values(options):
+                identifier = out["identifier"]
+
+        if identifier is not None:
+            data = self._table_viewer.tables[index].data
+            self._viewer.update_console({identifier: data})
+        return None
+
     def _init_ui(self):
         # buttons
         _header = QtW.QWidget()
@@ -146,7 +176,8 @@ class MainWidget(QtW.QWidget):
             _utils.create_button(self.load_layer_features, name="From\nFeatures"),  # noqa
             _utils.create_button(self.update_layer_features, name="Update\nFeatures"),  # noqa
             _utils.create_button(self.popup_current_table, name="Popup"),  # noqa
-            _utils.create_button(self.open_new_widget, name="New Widget"),  # noqa
+            _utils.create_button(self.send_table_to_namespace, name="Table to\nConsole"),  # noqa
+            _utils.create_button(self.open_new_widget, name="New\nWidget"),  # noqa
         ]
         # fmt: on
         for btn in buttons:
