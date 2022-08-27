@@ -20,6 +20,9 @@ class TableViewerWidget(_TableViewerWidget):
         raise AttributeError("console is not available in this widget.")
 
 
+_void = object()
+
+
 class LayerSource:
     """A weak reference to a napari layer."""
 
@@ -88,36 +91,40 @@ class MainWidget(QtW.QWidget):
         table.view_mode = "popup"
         return None
 
-    def load_layer_features(self):
+    def load_layer_features(self, layer: LayerWithFeatures = _void):
         """Load layer features from the napari viewer."""
         table = self._table_viewer.current_table
         if table is None:
             return
-        layer: LayerWithFeatures = get_layer(
-            layer={"nullable": False}, parent=self
-        )
+        if layer is _void:
+            layer: LayerWithFeatures = get_layer(
+                layer={"nullable": False}, parent=self
+            )
         if layer is not None:
-            self._table_viewer.add_table(
+            self._table_viewer.add_spreadsheet(
                 layer.features,
                 name=layer.name,
                 metadata={_SOURCE: LayerSource(layer)},
             )
 
-    def update_layer_features(self):
+    def update_layer_features(self, layer: LayerWithFeatures = _void):
         """Update napari layer features with the current table."""
         table = self._table_viewer.current_table
         if table is None:
             return
-        # try getting the source layer.
-        layer_source = table.metadata.get(_SOURCE, None)
-        choices = get_layers_with_features(table)
-        layer_params = {"choices": choices}
-        if layer_source is not None:
-            layer_source: LayerSource
-            layer_default = layer_source.layer
-            if layer_default is not None and layer_default in choices:
-                layer_params.update(value=layer_default)
-        layer: LayerWithFeatures = get_layer(layer=layer_params, parent=self)
+        if layer is _void:
+            # try getting the source layer.
+            layer_source = table.metadata.get(_SOURCE, None)
+            choices = get_layers_with_features(table)
+            layer_params = {"choices": choices, "nullable": False}
+            if layer_source is not None:
+                layer_source: LayerSource
+                layer_default = layer_source.layer
+                if layer_default is not None and layer_default in choices:
+                    layer_params.update(value=layer_default)
+            layer: LayerWithFeatures = get_layer(
+                layer=layer_params, parent=self
+            )
         if layer is not None:
             layer.features = table.data
             layer.refresh()
