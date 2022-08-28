@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 import weakref
 from typing import TYPE_CHECKING, Optional
 
-from magicgui.widgets import request_values
 from qtpy import QtWidgets as QtW
 from tabulous import TableViewerWidget as _TableViewerWidget
 
@@ -50,7 +51,7 @@ class LayerSource:
         return self._layer()
 
     @property
-    def features(self) -> "pd.DataFrame":
+    def features(self) -> pd.DataFrame:
         layer = self.layer
         if layer is not None:
             return layer.features
@@ -63,7 +64,7 @@ class MainWidget(QtW.QWidget):
     _current_widget: Optional[TableViewerWidget] = None
 
     def __init__(
-        self, napari_viewer: "napari.Viewer", *, new_sheet: bool = True
+        self, napari_viewer: napari.Viewer, *, new_sheet: bool = True
     ):
         super().__init__()
         self._viewer = napari_viewer
@@ -109,14 +110,12 @@ class MainWidget(QtW.QWidget):
         return None
 
     def load_layer_features(self, layer: LayerWithFeatures = _void):
-        """Load layer features from the napari viewer."""
+        """Load layer features as a spreadsheet from the napari viewer."""
         table = self._table_viewer.current_table
         if table is None:
             return
         if layer is _void:
-            layer: LayerWithFeatures = get_layer(
-                layer={"nullable": False}, parent=self
-            )
+            layer = _utils.get_layer(parent=self)
         if layer is not None:
             self._table_viewer.add_spreadsheet(
                 layer.features,
@@ -125,7 +124,7 @@ class MainWidget(QtW.QWidget):
             )
 
     def update_layer_features(self, layer: LayerWithFeatures = _void):
-        """Update napari layer features with the current table."""
+        """Update napari layer features with the current spreadsheet."""
         table = self._table_viewer.current_table
         if table is None:
             return
@@ -139,9 +138,7 @@ class MainWidget(QtW.QWidget):
                 layer_default = layer_source.layer
                 if layer_default is not None and layer_default in choices:
                     layer_params.update(value=layer_default)
-            layer: LayerWithFeatures = get_layer(
-                layer=layer_params, parent=self
-            )
+            layer = _utils.get_layer(parent=self)
         if layer is not None:
             layer.features = table.data
             layer.refresh()
@@ -154,12 +151,11 @@ class MainWidget(QtW.QWidget):
         return None
 
     def send_table_to_namespace(self, index: int, identifier: str = _void):
+        """Send data of the current spreadsheet to napari console."""
         if identifier is _void:
-            options = {
-                "identifier": {"widget_type": "LineEdit", "value": "df"}
-            }
-            if out := request_values(options):
-                identifier = out["identifier"]
+            identifier = _utils.get_str(
+                label="identifier", value="df", parent=self
+            )
 
         if identifier is not None:
             data = self._table_viewer.tables[index].data
@@ -192,8 +188,3 @@ class MainWidget(QtW.QWidget):
         _main_layout.addWidget(self._table_viewer.native)
         self.setLayout(_main_layout)
         return None
-
-
-@_utils.dialog_factory
-def get_layer(layer: LayerWithFeatures) -> LayerWithFeatures:
-    return layer

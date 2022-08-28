@@ -1,31 +1,46 @@
 from __future__ import annotations
 
-from typing import Callable, TypeVar
+from typing import TYPE_CHECKING, Callable
 
-from magicgui.widgets import Dialog
+from magicgui.widgets import ComboBox, Dialog, LineEdit
 from qtpy import QtWidgets as QtW
 
-_F = TypeVar("_F", bound=Callable)
+if TYPE_CHECKING:
+    from ._types import LayerWithFeatures
 
 
-def dialog_factory(function: _F) -> _F:
-    from magicgui.signature import magic_signature
+def get_str(
+    label: str = "string",
+    value: str = "",
+    parent: QtW.QWidget | None = None,
+) -> str | None:
+    dlg = Dialog(widgets=[LineEdit(label=label, value=value)])
+    dlg.native.setParent(parent, dlg.native.windowFlags())
+    if dlg.exec():
+        out = dlg[0].value
+    else:
+        out = None
+    return out
 
-    def _runner(parent=None, **param_options):
-        widgets = list(
-            magic_signature(function, gui_options=param_options)
-            .widgets()
-            .values()
-        )
-        dlg = Dialog(widgets=widgets)
-        dlg.native.setParent(parent, dlg.native.windowFlags())
-        if dlg.exec():
-            out = function(**dlg.asdict())
-        else:
-            out = None
-        return out
 
-    return _runner
+def get_layer(
+    label: str = "layer",
+    value=None,
+    parent: QtW.QWidget | None = None,
+) -> LayerWithFeatures | None:
+    from ._types import get_layers_with_features
+
+    cbox = ComboBox(
+        choices=get_layers_with_features, label=label, nullable=False
+    )
+    dlg = Dialog(widgets=[cbox])
+    dlg.native.setParent(parent, dlg.native.windowFlags())
+    dlg.reset_choices()
+    if dlg.exec():
+        out = dlg[0].value
+    else:
+        out = None
+    return out
 
 
 def create_button(
@@ -40,6 +55,6 @@ def create_button(
     if tooltip is None and slot.__doc__ is not None:
         tooltip = slot.__doc__.strip()
     btn = QtW.QPushButton(name)
-    btn.clicked.connect(slot)
+    btn.clicked.connect(lambda: slot())
     btn.setToolTip(tooltip)
     return btn
