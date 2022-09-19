@@ -81,9 +81,10 @@ class MainWidget(QtW.QWidget):
         self._table_viewer.toolbar.visible = True
         qtoolbar = self._table_viewer._qwidget._toolbar
         qtoolbar.setStyleSheet(_STYLE)
-        qtoolbar._child_widgets["Analyze"]._button_and_icon[3][0].setEnabled(
-            False
-        )
+        toggle_console_btn = qtoolbar._child_widgets[
+            "Analyze"
+        ]._button_and_icon[3][0]
+        toggle_console_btn.setEnabled(False)
 
     @classmethod
     def open_table_data(cls, path: str):
@@ -121,6 +122,7 @@ class MainWidget(QtW.QWidget):
                 layer.features,
                 name=layer.name,
                 metadata={_SOURCE: LayerSource(layer)},
+                dtyped=True,
             )
 
     def update_layer_features(self, layer: LayerWithFeatures = _void):
