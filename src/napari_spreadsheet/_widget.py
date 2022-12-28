@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 
 from qtpy import QtWidgets as QtW
 from tabulous import TableViewerWidget as _TableViewerWidget
+from tabulous import __version__ as tabulous_version
 
 from . import _utils
 from ._types import LayerWithFeatures, get_layers_with_features
@@ -79,12 +80,16 @@ class MainWidget(QtW.QWidget):
 
         # some napari specific settings...
         self._table_viewer.toolbar.visible = True
-        qtoolbar = self._table_viewer._qwidget._toolbar
-        qtoolbar.setStyleSheet(_STYLE)
-        toggle_console_btn = qtoolbar._child_widgets[
-            "Analyze"
-        ]._button_and_icon[3][0]
-        toggle_console_btn.setEnabled(False)
+        try:
+            tbar = self._table_viewer._qwidget._toolbar
+            tbar.setStyleSheet(_STYLE)
+            if tabulous_version < "0.4.0":
+                btn = tbar._child_widgets["Analyze"]._button_and_icon[3][0]
+            else:
+                btn = tbar._child_widgets["Home"]._buttons[4]
+            btn.setEnabled(False)
+        except Exception:
+            pass
 
     @classmethod
     def open_table_data(cls, path: str):
