@@ -17,7 +17,7 @@ Let's replace Microsoft Excel or Google Spreadsheet with `napari-spreadsheet` fo
 
 ![](images/image.png)
 
-This plugin is largely dependent on [tabulous](https://github.com/hanjinliu/tabulous). You can browse all the key-combos by pressing `Ctrl+K` &rarr; `Shift+?`.
+This plugin is largely dependent on [tabulous](https://github.com/hanjinliu/tabulous).
 
 ----------------------------------
 
