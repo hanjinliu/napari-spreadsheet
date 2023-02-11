@@ -70,9 +70,15 @@ class MainWidget(QtW.QWidget):
         super().__init__()
         self._viewer = napari_viewer
 
-        self._table_viewer = TableViewerWidget(show=False)
-        if new_sheet:
-            self._table_viewer.add_spreadsheet()
+        if tabulous_version >= "0.5.0":
+            from tabulous._utils import init_config
+
+            with init_config() as cfg:
+                cfg.window.nonmain_style = True
+                cfg.window.theme = f"{napari_viewer.theme}-blue"
+                self._table_viewer = TableViewerWidget(show=False)
+        else:
+            self._table_viewer = TableViewerWidget(show=False)
 
         self._init_ui()
 
@@ -82,14 +88,13 @@ class MainWidget(QtW.QWidget):
         self._table_viewer.toolbar.visible = True
         try:
             tbar = self._table_viewer._qwidget._toolbar
-            tbar.setStyleSheet(_STYLE)
-            if tabulous_version < "0.4.0":
-                btn = tbar._child_widgets["Analyze"]._button_and_icon[3][0]
-            else:
-                btn = tbar._child_widgets["Home"]._buttons[4]
+            btn = tbar._child_widgets["Home"]._buttons[4]
             btn.setEnabled(False)
         except Exception:
             pass
+
+        if new_sheet:
+            self._table_viewer.add_spreadsheet()
 
     @classmethod
     def open_table_data(cls, path: str):
