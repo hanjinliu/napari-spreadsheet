@@ -75,7 +75,8 @@ class MainWidget(QtW.QWidget):
 
             with init_config() as cfg:
                 cfg.window.nonmain_style = True
-                cfg.window.theme = f"{napari_viewer.theme}-blue"
+                col = cfg.window.theme.split("-")[1]
+                cfg.window.theme = f"{napari_viewer.theme}-{col}"
                 self._table_viewer = TableViewerWidget(show=False)
         else:
             self._table_viewer = TableViewerWidget(show=False)
@@ -158,7 +159,17 @@ class MainWidget(QtW.QWidget):
 
     def open_new_widget(self):
         """Open a new widget."""
-        table_viewer = TableViewerWidget(show=False)
+        if tabulous_version >= "0.5.0":
+            from tabulous._utils import init_config
+
+            with init_config() as cfg:
+                cfg.window.nonmain_style = True
+                col = cfg.window.theme.split("-")[1]
+                cfg.window.theme = f"{self._viewer.theme}-{col}"
+                table_viewer = TableViewerWidget(show=False)
+        else:
+            table_viewer = TableViewerWidget(show=False)
+
         self._viewer.window.add_dock_widget(table_viewer, name="Spreadsheet")
         return None
 
@@ -196,7 +207,8 @@ class MainWidget(QtW.QWidget):
         _header.setLayout(_layout)
 
         _main_layout = QtW.QVBoxLayout()
-        _main_layout.addWidget(_header)
+        self._table_viewer._qwidget.insertWidget(0, _header)
+        # _main_layout.addWidget(_header)
         _main_layout.addWidget(self._table_viewer.native)
         self.setLayout(_main_layout)
         return None
