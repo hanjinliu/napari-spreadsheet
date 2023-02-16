@@ -15,9 +15,9 @@ Let's replace Microsoft Excel or Google Spreadsheet with `napari-spreadsheet` fo
 - Update layer features from a spreadsheet.
 - Send spreadsheet data to the namespace of napari's console directly.
 
-![](images/image.png)
+![](https://github.com/hanjinliu/napari-spreadsheet/blob/main/images/image.png)
 
-This plugin is largely dependent on [tabulous](https://github.com/hanjinliu/tabulous).
+This plugin is largely dependent on [tabulous](https://github.com/hanjinliu/tabulous). To know more about the user interface, please see the [documentation](https://hanjinliu.github.io/tabulous/main/user_interface.html).
 
 ----------------------------------
 
