@@ -58,3 +58,18 @@ def create_button(
     btn.clicked.connect(lambda: slot())
     btn.setToolTip(tooltip)
     return btn
+
+
+def create_toolbutton(
+    name: str,
+    slots: list[tuple[str, Callable]],
+) -> QtW.QToolButton:
+    btn = QtW.QToolButton()
+    btn.setText(name)
+    btn.setPopupMode(QtW.QToolButton.ToolButtonPopupMode.InstantPopup)
+    menu = QtW.QMenu(btn)
+    for slot_name, slot in slots:
+        action = menu.addAction(slot_name, slot)
+        action.setToolTip(slot.__doc__)
+    btn.setMenu(menu)
+    return btn
