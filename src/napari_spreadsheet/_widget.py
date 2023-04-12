@@ -12,7 +12,8 @@ from ._types import LayerWithFeatures, get_layers_with_features
 
 if TYPE_CHECKING:
     import napari
-    import pandas as pd
+    from napari.layers import Layer
+    from tabulous.widgets import SpreadSheet
 
 
 class TableViewerWidget(_TableViewerWidget):
@@ -25,19 +26,11 @@ class TableViewerWidget(_TableViewerWidget):
 
 _void = object()
 
-_STYLE = """
-QToolButton:hover {
-    border: 2px solid lightgray;
-    border-radius: 4px;
-    padding: 2px;
-}
-"""
-
 
 class LayerSource:
     """A weak reference to a napari layer."""
 
-    def __init__(self, layer: LayerWithFeatures):
+    def __init__(self, layer: Layer):
         self._layer = weakref.ref(layer)
 
     def __repr__(self) -> str:
@@ -48,17 +41,11 @@ class LayerSource:
         return f"{clsname}({layer})"
 
     @property
-    def layer(self) -> LayerWithFeatures:
+    def layer(self) -> Layer:
         return self._layer()
 
-    @property
-    def features(self) -> pd.DataFrame:
-        layer = self.layer
-        if layer is not None:
-            return layer.features
 
-
-_SOURCE = "source"
+_SOURCE = "spreadsheet-source"
 
 
 class MainWidget(QtW.QWidget):
@@ -70,15 +57,12 @@ class MainWidget(QtW.QWidget):
         super().__init__()
         self._viewer = napari_viewer
 
-        if tabulous_version >= "0.5.0":
-            from tabulous._utils import init_config
+        from tabulous._utils import init_config
 
-            with init_config() as cfg:
-                cfg.window.nonmain_style = True
-                col = cfg.window.theme.split("-")[1]
-                cfg.window.theme = f"{napari_viewer.theme}-{col}"
-                self._table_viewer = TableViewerWidget(show=False)
-        else:
+        with init_config() as cfg:
+            cfg.window.nonmain_style = True
+            col = cfg.window.theme.split("-")[1]
+            cfg.window.theme = f"{napari_viewer.theme}-{col}"
             self._table_viewer = TableViewerWidget(show=False)
 
         self._init_ui()
@@ -91,6 +75,7 @@ class MainWidget(QtW.QWidget):
             tbar = self._table_viewer._qwidget._toolbar
             btn = tbar._child_widgets["Home"]._buttons[4]
             btn.setEnabled(False)
+            self._table_viewer.keymap.unregister("Ctrl+Shift+C")
         except Exception:
             pass
 
@@ -142,20 +127,22 @@ class MainWidget(QtW.QWidget):
         if table is None:
             return
         if layer is _void:
-            # try getting the source layer.
-            layer_source = table.metadata.get(_SOURCE, None)
-            choices = get_layers_with_features(table)
-            layer_params = {"choices": choices, "nullable": False}
-            if layer_source is not None:
-                layer_source: LayerSource
-                layer_default = layer_source.layer
-                if layer_default is not None and layer_default in choices:
-                    layer_params.update(value=layer_default)
-            layer = _utils.get_layer(parent=self)
+            layer = self._get_source(table)
         if layer is not None:
             layer.features = table.data
             layer.refresh()
         return None
+
+    def _get_source(self, table: SpreadSheet):
+        layer_source = table.metadata.get(_SOURCE, None)
+        choices = get_layers_with_features(table)
+        layer_params = {"choices": choices, "nullable": False}
+        if layer_source is not None:
+            layer_source: LayerSource
+            layer_default = layer_source.layer
+            if layer_default is not None and layer_default in choices:
+                layer_params.update(value=layer_default)
+        return _utils.get_layer(parent=self)
 
     def open_new_widget(self):
         """Open a new widget."""
@@ -173,7 +160,7 @@ class MainWidget(QtW.QWidget):
         self._viewer.window.add_dock_widget(table_viewer, name="Spreadsheet")
         return None
 
-    def send_table_to_namespace(self, index: int, identifier: str = _void):
+    def send_table_to_namespace(self, identifier: str = _void):
         """Send data of the current spreadsheet to napari console."""
         if identifier is _void:
             identifier = _utils.get_str(
@@ -181,9 +168,34 @@ class MainWidget(QtW.QWidget):
             )
 
         if identifier is not None:
-            data = self._table_viewer.tables[index].data
+            data = self._table_viewer.current_table.data
             self._viewer.update_console({identifier: data})
         return None
+
+    def layer_to_spreadsheet(self, layer: LayerWithFeatures = _void):
+        from ._conversion import layer_to_spreadsheet
+
+        if layer is _void:
+            layer = _utils.get_layer(parent=self)
+        sheet = layer_to_spreadsheet(layer, self._table_viewer)
+        sheet.metadata[_SOURCE] = LayerSource(layer)
+
+    def spreadsheet_to_layer(self, layer: LayerWithFeatures = _void):
+        from ._conversion import spreadsheet_to_layer
+
+        table = self._table_viewer.current_table
+        if layer is _void:
+            layer = self._get_source(table)
+        spreadsheet_to_layer(layer, table)
+
+    def watch_layer(self, layer: LayerWithFeatures = _void):
+        from ._linker import PointsLinker
+
+        if layer is _void:
+            layer = _utils.get_layer(parent=self)
+        self.layer_to_spreadsheet(layer)
+        linker = PointsLinker.prepare(layer, self._table_viewer.current_table)
+        layer.metadata["linker"] = linker
 
     def _init_ui(self):
         # buttons
@@ -191,9 +203,17 @@ class MainWidget(QtW.QWidget):
         _layout = QtW.QHBoxLayout()
         _layout.setContentsMargins(0, 0, 0, 0)
         # fmt: off
-        buttons = [
-            _utils.create_button(self.load_layer_features, name="From\nFeatures"),  # noqa
-            _utils.create_button(self.update_layer_features, name="Update\nFeatures"),  # noqa
+        buttons: list[QtW.QPushButton | QtW.QToolButton] = [
+            _utils.create_toolbutton(
+                "Layers",
+                [
+                    ("Layer features -> SpreadSheet", self.load_layer_features),  # noqa
+                    ("SpreadSheet -> Layer features", self.update_layer_features),  # noqa
+                    ("Layer state -> SpreadSheet", self.layer_to_spreadsheet),  # noqa
+                    ("SpreadSheet -> Layer state", self.spreadsheet_to_layer),  # noqa
+                    ("Link layer", self.watch_layer),
+                ]
+            ),
             _utils.create_button(self.popup_current_table, name="Popup"),  # noqa
             _utils.create_button(self.send_table_to_namespace, name="Table to\nConsole"),  # noqa
             _utils.create_button(self.open_new_widget, name="New\nWidget"),  # noqa
