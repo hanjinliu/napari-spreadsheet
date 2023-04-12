@@ -198,10 +198,13 @@ class MainWidget(QtW.QWidget):
         sheet = layer_to_spreadsheet(layer, self._table_viewer)
         sheet.metadata[_SOURCE] = LayerSource(layer)
 
-    def spreadsheet_to_layer(self, layer: Layer = _void):
+    def spreadsheet_to_layer(
+        self, layer: Layer = _void, table: SpreadSheet = _void
+    ):
         from ._conversion import spreadsheet_to_layer
 
-        table = self._table_viewer.current_table
+        if table is _void:
+            table = self._table_viewer.current_table
         if layer is _void:
             layer = _get_source(table)
             if layer is None:
@@ -212,10 +215,13 @@ class MainWidget(QtW.QWidget):
                     return
         spreadsheet_to_layer(layer, table)
 
-    def link_spreadsheet_and_layer(self, layer: Layer = _void):
+    def link_spreadsheet_and_layer(
+        self, layer: Layer = _void, table: SpreadSheet = _void
+    ):
         from ._linker import get_linker
 
-        table = self._table_viewer.current_table
+        if table is _void:
+            table = self._table_viewer.current_table
         if layer is _void:
             layer = _get_source(table)
             if layer is None:
@@ -224,8 +230,9 @@ class MainWidget(QtW.QWidget):
         source: LayerSource = table.metadata[_SOURCE]
         source.linker = linker
 
-    def unlink_spreadsheet_and_layer(self):
-        table = self._table_viewer.current_table
+    def unlink_spreadsheet_and_layer(self, table: SpreadSheet = _void):
+        if table is _void:
+            table = self._table_viewer.current_table
         source: LayerSource = table.metadata[_SOURCE]
         source.linker = None
 
