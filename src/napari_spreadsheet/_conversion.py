@@ -38,7 +38,7 @@ def spreadsheet_to_layer(
 @layer_to_dataframe.register
 def points_to_dataframe(
     layer: Points,
-    axis_labels: Sequence[str] | None = None,
+    axis_labels: Sequence[str] = None,
 ) -> pd.DataFrame:
     data = layer.data
     if axis_labels is None:
@@ -64,7 +64,7 @@ def points_to_dataframe(
 @layer_to_dataframe.register
 def shapes_to_dataframe(
     layer: Shapes,
-    axis_labels: Sequence[str] | None = None,
+    axis_labels: Sequence[str] = None,
 ) -> pd.DataFrame:
     dict_ = {}
     dict_["face_color"] = [
@@ -80,7 +80,7 @@ def shapes_to_dataframe(
 @layer_to_dataframe.register
 def vectors_to_dataframe(
     layer: Vectors,
-    axis_labels: Sequence[str] | None = None,
+    axis_labels: Sequence[str] = None,
 ) -> pd.DataFrame:
     data = layer.data
     if axis_labels is None:
