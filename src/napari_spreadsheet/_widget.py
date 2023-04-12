@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import weakref
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, TypeVar
 
 from qtpy import QtWidgets as QtW
 from tabulous import TableViewerWidget as _TableViewerWidget
@@ -14,6 +14,9 @@ if TYPE_CHECKING:
     import napari
     from napari.layers import Layer
     from tabulous.widgets import SpreadSheet
+    from ._linker import _LayerLinker
+
+    _L = TypeVar("_L", bound=Layer)
 
 
 class TableViewerWidget(_TableViewerWidget):
@@ -32,6 +35,7 @@ class LayerSource:
 
     def __init__(self, layer: Layer):
         self._layer = weakref.ref(layer)
+        self._linker: weakref.ReferenceType[_LayerLinker] | None = None
 
     def __repr__(self) -> str:
         layer = self.layer
@@ -44,12 +48,27 @@ class LayerSource:
     def layer(self) -> Layer:
         return self._layer()
 
+    @property
+    def linker(self) -> _LayerLinker | None:
+        if self._linker is None:
+            return None
+        return self._linker()
+
+    @linker.setter
+    def linker(self, linker: _LayerLinker | None):
+        if linker is None:
+            if linker := self.linker:
+                linker.unlink()
+            self._linker = None
+        else:
+            self._linker = weakref.ref(linker)
+
 
 _SOURCE = "spreadsheet-source"
 
 
 class MainWidget(QtW.QWidget):
-    _current_widget: Optional[TableViewerWidget] = None
+    _current_widget: TableViewerWidget | None = None
 
     def __init__(
         self, napari_viewer: napari.Viewer, *, new_sheet: bool = True
@@ -112,7 +131,9 @@ class MainWidget(QtW.QWidget):
         if table is None:
             return
         if layer is _void:
-            layer = _utils.get_layer(parent=self)
+            layer = _utils.get_layer_by_dialog(
+                parent=self, choices=get_layers_with_features
+            )
         if layer is not None:
             self._table_viewer.add_spreadsheet(
                 layer.features,
@@ -127,22 +148,15 @@ class MainWidget(QtW.QWidget):
         if table is None:
             return
         if layer is _void:
-            layer = self._get_source(table)
+            layer = _get_source_with_features(table)
+            if layer is None:
+                layer = _utils.get_layer_by_dialog(
+                    parent=self, choices=get_layers_with_features
+                )
         if layer is not None:
             layer.features = table.data
             layer.refresh()
         return None
-
-    def _get_source(self, table: SpreadSheet):
-        layer_source = table.metadata.get(_SOURCE, None)
-        choices = get_layers_with_features(table)
-        layer_params = {"choices": choices, "nullable": False}
-        if layer_source is not None:
-            layer_source: LayerSource
-            layer_default = layer_source.layer
-            if layer_default is not None and layer_default in choices:
-                layer_params.update(value=layer_default)
-        return _utils.get_layer(parent=self)
 
     def open_new_widget(self):
         """Open a new widget."""
@@ -163,7 +177,7 @@ class MainWidget(QtW.QWidget):
     def send_table_to_namespace(self, identifier: str = _void):
         """Send data of the current spreadsheet to napari console."""
         if identifier is _void:
-            identifier = _utils.get_str(
+            identifier = _utils.get_str_by_dialog(
                 label="identifier", value="df", parent=self
             )
 
@@ -172,30 +186,48 @@ class MainWidget(QtW.QWidget):
             self._viewer.update_console({identifier: data})
         return None
 
-    def layer_to_spreadsheet(self, layer: LayerWithFeatures = _void):
+    def layer_to_spreadsheet(self, layer: Layer = _void):
         from ._conversion import layer_to_spreadsheet
 
         if layer is _void:
-            layer = _utils.get_layer(parent=self)
+            layer = _utils.get_layer_by_dialog(
+                parent=self, choices=_utils.get_layers
+            )
+            if layer is None:
+                return
         sheet = layer_to_spreadsheet(layer, self._table_viewer)
         sheet.metadata[_SOURCE] = LayerSource(layer)
 
-    def spreadsheet_to_layer(self, layer: LayerWithFeatures = _void):
+    def spreadsheet_to_layer(self, layer: Layer = _void):
         from ._conversion import spreadsheet_to_layer
 
         table = self._table_viewer.current_table
         if layer is _void:
-            layer = self._get_source(table)
+            layer = _get_source(table)
+            if layer is None:
+                layer = _utils.get_layer_by_dialog(
+                    parent=self, choices=_utils.get_layers
+                )
+                if layer is None:
+                    return
         spreadsheet_to_layer(layer, table)
 
-    def watch_layer(self, layer: LayerWithFeatures = _void):
-        from ._linker import PointsLinker
+    def link_spreadsheet_and_layer(self, layer: Layer = _void):
+        from ._linker import get_linker
 
+        table = self._table_viewer.current_table
         if layer is _void:
-            layer = _utils.get_layer(parent=self)
-        self.layer_to_spreadsheet(layer)
-        linker = PointsLinker.prepare(layer, self._table_viewer.current_table)
-        layer.metadata["linker"] = linker
+            layer = _get_source(table)
+            if layer is None:
+                raise RuntimeError("No layer is available.")
+        linker = get_linker(layer, table)
+        source: LayerSource = table.metadata[_SOURCE]
+        source.linker = linker
+
+    def unlink_spreadsheet_and_layer(self):
+        table = self._table_viewer.current_table
+        source: LayerSource = table.metadata[_SOURCE]
+        source.linker = None
 
     def _init_ui(self):
         # buttons
@@ -203,15 +235,16 @@ class MainWidget(QtW.QWidget):
         _layout = QtW.QHBoxLayout()
         _layout.setContentsMargins(0, 0, 0, 0)
         # fmt: off
-        buttons: list[QtW.QPushButton | QtW.QToolButton] = [
-            _utils.create_toolbutton(
+        buttons: list[QtW.QPushButton] = [
+            _utils.create_menubutton(
                 "Layers",
                 [
                     ("Layer features -> SpreadSheet", self.load_layer_features),  # noqa
                     ("SpreadSheet -> Layer features", self.update_layer_features),  # noqa
                     ("Layer state -> SpreadSheet", self.layer_to_spreadsheet),  # noqa
                     ("SpreadSheet -> Layer state", self.spreadsheet_to_layer),  # noqa
-                    ("Link layer", self.watch_layer),
+                    ("Link layer", self.link_spreadsheet_and_layer),
+                    ("Unlink layer", self.unlink_spreadsheet_and_layer)
                 ]
             ),
             _utils.create_button(self.popup_current_table, name="Popup"),  # noqa
@@ -232,3 +265,27 @@ class MainWidget(QtW.QWidget):
         _main_layout.addWidget(self._table_viewer.native)
         self.setLayout(_main_layout)
         return None
+
+
+def _get_source_with_features(table: SpreadSheet) -> LayerWithFeatures | None:
+    layer_source = table.metadata.get(_SOURCE, None)
+    if layer_source is None:
+        return None
+    available_layers = get_layers_with_features(table)
+    layer_source: LayerSource
+    layer_default = layer_source.layer
+    if layer_default is not None and layer_default in available_layers:
+        return layer_default
+    return None
+
+
+def _get_source(table: SpreadSheet) -> Layer | None:
+    layer_source = table.metadata.get(_SOURCE, None)
+    if layer_source is None:
+        return None
+    available_layers = _utils.get_layers(table)
+    layer_source: LayerSource
+    layer_default = layer_source.layer
+    if layer_default is not None and layer_default in available_layers:
+        return layer_default
+    return None

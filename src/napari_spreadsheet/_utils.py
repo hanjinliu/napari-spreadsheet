@@ -6,10 +6,10 @@ from magicgui.widgets import ComboBox, Dialog, LineEdit
 from qtpy import QtWidgets as QtW
 
 if TYPE_CHECKING:
-    from ._types import LayerWithFeatures
+    from napari.layers import Layer
 
 
-def get_str(
+def get_str_by_dialog(
     label: str = "string",
     value: str = "",
     parent: QtW.QWidget | None = None,
@@ -23,16 +23,11 @@ def get_str(
     return out
 
 
-def get_layer(
-    label: str = "layer",
-    value=None,
+def get_layer_by_dialog(
     parent: QtW.QWidget | None = None,
-) -> LayerWithFeatures | None:
-    from ._types import get_layers_with_features
-
-    cbox = ComboBox(
-        choices=get_layers_with_features, label=label, nullable=False
-    )
+    choices=None,
+) -> Layer | None:
+    cbox = ComboBox(choices=choices, label="Layer", nullable=False)
     dlg = Dialog(widgets=[cbox])
     dlg.native.setParent(parent, dlg.native.windowFlags())
     dlg.reset_choices()
@@ -41,6 +36,15 @@ def get_layer(
     else:
         out = None
     return out
+
+
+def get_layers(w):
+    from napari.utils._magicgui import find_viewer_ancestor
+
+    viewer = find_viewer_ancestor(w)
+    if viewer is None:
+        return []
+    return list(viewer.layers)
 
 
 def create_button(
@@ -60,13 +64,12 @@ def create_button(
     return btn
 
 
-def create_toolbutton(
+def create_menubutton(
     name: str,
     slots: list[tuple[str, Callable]],
-) -> QtW.QToolButton:
-    btn = QtW.QToolButton()
+) -> QtW.QPushButton:
+    btn = QtW.QPushButton()
     btn.setText(name)
-    btn.setPopupMode(QtW.QToolButton.ToolButtonPopupMode.InstantPopup)
     menu = QtW.QMenu(btn)
     for slot_name, slot in slots:
         action = menu.addAction(slot_name, slot)
