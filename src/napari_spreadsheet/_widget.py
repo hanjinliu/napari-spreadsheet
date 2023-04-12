@@ -189,7 +189,7 @@ class MainWidget(QtW.QWidget):
         spreadsheet_to_layer(layer, table)
 
     def watch_layer(self, layer: LayerWithFeatures = _void):
-        from ._conversion import PointsLinker
+        from ._linker import PointsLinker
 
         if layer is _void:
             layer = _utils.get_layer(parent=self)
