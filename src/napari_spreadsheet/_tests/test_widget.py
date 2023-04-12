@@ -1,6 +1,6 @@
 import napari
 
-from napari_spreadsheet import MainWidget
+from napari_spreadsheet import MainWidget, current_widget
 
 
 def test_layer_features(make_napari_viewer):
@@ -28,3 +28,9 @@ def test_open_new_widget(make_napari_viewer):
     viewer: napari.Viewer = make_napari_viewer()
     wdt = MainWidget(viewer)
     wdt.open_new_widget()
+
+
+def test_current_widget(make_napari_viewer):
+    viewer: napari.Viewer = make_napari_viewer()
+    wdt = MainWidget(viewer)
+    assert current_widget() is wdt._table_viewer

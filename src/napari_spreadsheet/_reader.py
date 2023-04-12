@@ -6,7 +6,7 @@ PathOrPaths = Union[PathLike, Sequence[PathLike]]
 
 
 def get_reader(path: PathOrPaths):
-    if isinstance(path, str):
+    if isinstance(path, (str, Path)):
         if Path(path).suffix in (".txt", ".dat", ".csv", ".xlsx"):
             return open_table_data
 

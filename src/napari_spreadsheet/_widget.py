@@ -10,7 +10,7 @@ from tabulous import __version__ as tabulous_version
 from . import _utils
 from ._types import LayerWithFeatures, get_layers_with_features
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     import napari
     from napari.layers import Layer
     from tabulous.widgets import SpreadSheet

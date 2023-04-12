@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, NewType
 
 from magicgui import register_type
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     import pandas as pd
     from magicgui.widgets import Widget
     from napari.layers import Layer

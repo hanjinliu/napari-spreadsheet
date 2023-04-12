@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Callable
 from magicgui.widgets import ComboBox, Dialog, LineEdit
 from qtpy import QtWidgets as QtW
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from napari.layers import Layer
 
 
