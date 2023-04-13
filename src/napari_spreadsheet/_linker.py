@@ -9,7 +9,6 @@ from tabulous.widgets import SpreadSheet
 from ._conversion import (
     layer_to_dataframe,
     spreadsheet_to_layer,
-    layer_to_spreadsheet,
 )
 
 
@@ -45,6 +44,7 @@ class _LayerLinker(Generic[_L]):
     @classmethod
     def prepare(cls, layer: _L, sheet: SpreadSheet):
         self = cls(layer, sheet)
+        self.sync_sheet()
         self.link()
         return self
 
@@ -59,11 +59,16 @@ class _LayerLinker(Generic[_L]):
 
     @abstractmethod
     def link(self):
-        pass
+        """Link the layer and the spreadsheet."""
 
     @abstractmethod
     def unlink(self):
-        pass
+        """Unlink the layer and the spreadsheet."""
+
+    def sync_sheet(self):
+        """Sync the spreadsheet with the layer."""
+        df = layer_to_dataframe(self._layer)
+        self._sheet.data = df
 
 
 class PointsLinker(_LayerLinker[Points]):
@@ -126,5 +131,5 @@ class PointsLinker(_LayerLinker[Points]):
             try:
                 spreadsheet_to_layer(self._layer, self._sheet)
             except Exception as e:
-                layer_to_spreadsheet(self._layer, self._sheet)
+                self.sync_sheet()
                 raise e

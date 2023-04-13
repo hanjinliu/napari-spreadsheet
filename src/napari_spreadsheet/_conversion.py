@@ -101,11 +101,17 @@ def vectors_to_dataframe(
     return pd.DataFrame(dict_)
 
 
+def _parse_color(x: str):
+    if x == "":
+        return None
+    return normalize_color(x)
+
+
 def _set_background_color(
     table: SpreadSheet, name: Sequence[str] = ("face_color", "edge_color")
 ):
     for n in name:
-        table[n].background_color.set(lambda x: x)
+        table[n].background_color.set(_parse_color)
         table[n].background_color.set_opacity(0.5)
 
 
