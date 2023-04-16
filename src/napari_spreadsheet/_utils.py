@@ -71,6 +71,7 @@ def create_menubutton(
     btn = QtW.QPushButton()
     btn.setText(name)
     menu = QtW.QMenu(btn)
+    menu.setToolTipsVisible(True)
     for slot_name, slot in slots:
         action = menu.addAction(slot_name, slot)
         action.setToolTip(slot.__doc__)

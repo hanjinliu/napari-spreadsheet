@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import weakref
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Callable, TypeVar
 
 from qtpy import QtWidgets as QtW
+import numpy as np
 from tabulous import TableViewerWidget as _TableViewerWidget
-from tabulous import __version__ as tabulous_version
 
 from . import _utils
-from ._types import LayerWithFeatures, get_layers_with_features
+from ._types import (
+    LayerWithFeatures,
+    LayerWithText,
+    get_layers_with_features,
+    get_layers_with_text,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     import napari
@@ -137,7 +142,7 @@ class MainWidget(QtW.QWidget):
         if layer is not None:
             self._table_viewer.add_spreadsheet(
                 layer.features,
-                name=layer.name,
+                name=layer.name + "-features",
                 metadata={_SOURCE: LayerSource(layer)},
                 dtyped=True,
             )
@@ -148,7 +153,7 @@ class MainWidget(QtW.QWidget):
         if table is None:
             return
         if layer is _void:
-            layer = _get_source_with_features(table)
+            layer = _get_source(table, choices=get_layers_with_features)
             if layer is None:
                 layer = _utils.get_layer_by_dialog(
                     parent=self, choices=get_layers_with_features
@@ -158,17 +163,76 @@ class MainWidget(QtW.QWidget):
             layer.refresh()
         return None
 
-    def open_new_widget(self):
-        """Open a new widget."""
-        if tabulous_version >= "0.5.0":
-            from tabulous._utils import init_config
+    def load_layer_text(self, layer: LayerWithText = _void):
+        """Load layer text as a spreadsheet from the napari viewer."""
+        from napari.layers.utils.string_encoding import (
+            ConstantStringEncoding,
+            ManualStringEncoding,
+            DirectStringEncoding,
+            FormatStringEncoding,
+        )
 
-            with init_config() as cfg:
-                cfg.window.nonmain_style = True
-                col = cfg.window.theme.split("-")[1]
-                cfg.window.theme = f"{self._viewer.theme}-{col}"
-                table_viewer = TableViewerWidget(show=False)
-        else:
+        table = self._table_viewer.current_table
+        if table is None:
+            return
+        if layer is _void:
+            layer = _utils.get_layer_by_dialog(
+                parent=self, choices=get_layers_with_text
+            )
+        if layer is not None:
+            if isinstance(layer.text.string, ConstantStringEncoding):
+                data = np.zeros(len(layer.data), dtype="<U1")
+            elif isinstance(layer.text.string, ManualStringEncoding):
+                data = layer.text.string.array
+            elif isinstance(
+                layer.text.string, (DirectStringEncoding, FormatStringEncoding)
+            ):
+                data = layer.text.string(layer.features)
+            else:
+                raise NotImplementedError(layer.text.string)
+
+            self._table_viewer.add_spreadsheet(
+                {"text": data},
+                name=layer.name + "-text",
+                metadata={_SOURCE: LayerSource(layer)},
+                dtyped=True,
+            )
+
+    def update_layer_text(self, layer: LayerWithText = _void):
+        """Update napari layer text with the current spreadsheet."""
+        table = self._table_viewer.current_table
+        if table is None:
+            return
+        if layer is _void:
+            layer = _get_source(table, choices=get_layers_with_text)
+            if layer is None:
+                layer = _utils.get_layer_by_dialog(
+                    parent=self, choices=get_layers_with_text
+                )
+        if layer is not None:
+            df = table.data
+            if df.shape[1] == 1:
+                text = df.iloc[:, 0].tolist()
+            elif "text" in df.columns:
+                text = df["text"].tolist()
+            else:
+                raise ValueError(
+                    "Could not find the column for the layer text. "
+                    "Spreadsheet must have only one column or a column "
+                    "named 'text'."
+                )
+            layer.text = text
+            layer.refresh()
+        return None
+
+    def open_new_widget(self):
+        """Open a new spreadsheet dock widget."""
+        from tabulous._utils import init_config
+
+        with init_config() as cfg:
+            cfg.window.nonmain_style = True
+            col = cfg.window.theme.split("-")[1]
+            cfg.window.theme = f"{self._viewer.theme}-{col}"
             table_viewer = TableViewerWidget(show=False)
 
         self._viewer.window.add_dock_widget(table_viewer, name="Spreadsheet")
@@ -187,6 +251,7 @@ class MainWidget(QtW.QWidget):
         return None
 
     def layer_to_spreadsheet(self, layer: Layer = _void):
+        """Convert layer state to a spreadsheet."""
         from ._conversion import layer_to_spreadsheet
 
         if layer is _void:
@@ -201,6 +266,7 @@ class MainWidget(QtW.QWidget):
     def spreadsheet_to_layer(
         self, layer: Layer = _void, table: SpreadSheet = _void
     ):
+        """Update layer state using the current spreadsheet."""
         from ._conversion import spreadsheet_to_layer
 
         if table is _void:
@@ -218,6 +284,7 @@ class MainWidget(QtW.QWidget):
     def link_spreadsheet_and_layer(
         self, layer: Layer = _void, table: SpreadSheet = _void
     ):
+        """Link the layer state and the corresponding spreadsheet."""
         from ._linker import get_linker
 
         if table is _void:
@@ -231,6 +298,7 @@ class MainWidget(QtW.QWidget):
         source.linker = linker
 
     def unlink_spreadsheet_and_layer(self, table: SpreadSheet = _void):
+        """Unlink the layer from the current spreadsheet."""
         if table is _void:
             table = self._table_viewer.current_table
         source: LayerSource = table.metadata[_SOURCE]
@@ -246,17 +314,19 @@ class MainWidget(QtW.QWidget):
             _utils.create_menubutton(
                 "Layers",
                 [
-                    ("Layer features -> SpreadSheet", self.load_layer_features),  # noqa
-                    ("SpreadSheet -> Layer features", self.update_layer_features),  # noqa
                     ("Layer state -> SpreadSheet", self.layer_to_spreadsheet),  # noqa
+                    ("Layer features -> SpreadSheet", self.load_layer_features),  # noqa
+                    ("Layer text -> SpreadSheet", self.load_layer_text),
                     ("SpreadSheet -> Layer state", self.spreadsheet_to_layer),  # noqa
-                    ("Link layer", self.link_spreadsheet_and_layer),
-                    ("Unlink layer", self.unlink_spreadsheet_and_layer)
+                    ("SpreadSheet -> Layer features", self.update_layer_features),  # noqa
+                    ("SpreadSheet -> Layer text", self.update_layer_text),
+                    ("Link layer state", self.link_spreadsheet_and_layer),
+                    ("Unlink layer state", self.unlink_spreadsheet_and_layer),
                 ]
             ),
             _utils.create_button(self.popup_current_table, name="Popup"),  # noqa
-            _utils.create_button(self.send_table_to_namespace, name="Table to\nConsole"),  # noqa
-            _utils.create_button(self.open_new_widget, name="New\nWidget"),  # noqa
+            _utils.create_button(self.send_table_to_namespace, name="Table to console"),  # noqa
+            _utils.create_button(self.open_new_widget, name="New widget"),  # noqa
         ]
         # fmt: on
         for btn in buttons:
@@ -274,23 +344,16 @@ class MainWidget(QtW.QWidget):
         return None
 
 
-def _get_source_with_features(table: SpreadSheet) -> LayerWithFeatures | None:
+def _get_source(
+    table: SpreadSheet,
+    choices: Callable[[SpreadSheet], list[_L]] | None = None,
+) -> _L | None:
     layer_source = table.metadata.get(_SOURCE, None)
     if layer_source is None:
         return None
-    available_layers = get_layers_with_features(table)
-    layer_source: LayerSource
-    layer_default = layer_source.layer
-    if layer_default is not None and layer_default in available_layers:
-        return layer_default
-    return None
-
-
-def _get_source(table: SpreadSheet) -> Layer | None:
-    layer_source = table.metadata.get(_SOURCE, None)
-    if layer_source is None:
-        return None
-    available_layers = _utils.get_layers(table)
+    if choices is None:
+        choices = _utils.get_layers
+    available_layers = choices(table)
     layer_source: LayerSource
     layer_default = layer_source.layer
     if layer_default is not None and layer_default in available_layers:
